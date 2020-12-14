@@ -1,0 +1,127 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(sp)
+library(maps)
+library(maptools)
+library(usmap)
+
+# The single argument to this function, pointsDF, is a data.frame in which:
+#   - column 1 contains the longitude in degrees (negative in the US)
+#   - column 2 contains the latitude in degrees
+
+latlong2county <- function(pointsDF) {
+    # Prepare SpatialPolygons object with one SpatialPolygon
+    # per county
+    counties <- map('county', fill=TRUE, col="transparent", plot=FALSE)
+    IDs <- sapply(strsplit(counties$names, ":"), function(x) x[1])
+    counties_sp <- map2SpatialPolygons(counties, IDs=IDs,
+                     proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+    # Convert pointsDF to a SpatialPoints object 
+    pointsSP <- SpatialPoints(pointsDF, 
+                    proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+    # Use 'over' to get _indices_ of the Polygons object containing each point 
+    indices <- over(pointsSP, counties_sp)
+
+    # Return the county names of the Polygons object containing each point
+    countyNames <- sapply(counties_sp@polygons, function(x) x@ID)
+    #countyNames[indices]
+  
+    state_and_county = strsplit(countyNames[indices],",")
+    #fips(state=state1, county = county1)
+    
+    len = length(state_and_county)
+    fips_array = array(1:len, dim=c(len))
+    for (i in seq(1,len,1)){
+      state = state_and_county[[i]][1]
+      county = state_and_county[[i]][2]
+      #print(c(i,state_and_county[[i]][1]))
+      # Hardcoded for special case of district of columbia
+      if (identical(state,"district of columbia")){
+        fips_array[i] = "11000"
+      }
+      
+      # virginia has city instead of county
+      else if (identical(state,"virginia")){
+        fips_array[i] = tryCatch({fips(state = state, county= county)},error=function(e){fips_array[i] = "None"})
+        if (nchar(fips_array[i]) != 5){
+          fips_array[i] = fips(state = state, county= paste(county, "city"))
+        }
+      }
+      
+      # Hardcode
+      else if (identical(county, "du page")){
+        county = "dupage"
+        fips_array[i] = fips(state = state, county= county)
+      }
+      
+      # Hardcode
+      else if (identical(county, "de kalb")){
+        county = "dekalb"
+        fips_array[i] = fips(state = state, county= county)
+      }
+      # Hardcode
+      else if (identical(county, "prince georges")){
+        county = "prince george's"
+        fips_array[i] = fips(state = state, county= county)
+      }
+      
+      else if (identical(county, "de soto")){
+        county = "desoto"
+        fips_array[i] = fips(state = state, county= county)
+      }
+      
+      else if (identical(substr(county,1,3), "la ")){
+        county = paste(substr(county, 1, 2), substr(county, 3, nchar(county)), sep = " ")
+        fips_array[i] = fips(state = state, county= county)
+      }
+        
+      # louisiana has parish instead of county
+      else if (identical(state,"louisiana")){
+        fips_array[i] = tryCatch({fips(state = state, county= county)},error=function(e){fips_array[i] = "None"})
+        if (nchar(fips_array[i]) != 5){
+          fips_array[i] = fips(state = state, county= paste(county, "parish"))
+        }
+      }
+      
+      # convert st to st.
+      else if (identical(substr(county,1,3),"st ")){
+        county = paste(substr(county, 1, 2), substr(county, 3, nchar(county)), sep = ".")
+        fips_array[i] = fips(state = state, county = county)
+      }
+      # Ignores coordinates that cannot find county/state
+      else if (is.na(state) == FALSE){
+        #print(i)
+        fips_array[i] = fips(state = state, county = county)
+      }
+      else{fips_array[i] = "NA"}
+    }
+    fips_array
+}
+```
+
+```{r}
+# Test the function using points in Wisconsin and Oregon.
+data <- read.csv(file = 'data/listOfAirportCoords.csv')
+x = c(-77.0377, -73.8726, -83.3534,	-93.2218, -118.4079971, -84.6678, -90.2580)
+y = c(38.85210, 40.77720, 42.21240, 44.88200, 33.94250107, 	39.04880,29.99340)
+x1 = data$long
+y1 = data$lat 
+testPoints <- data.frame(x = x, y = y)
+
+fips.data = data.frame("Fips_code" = latlong2county(testPoints))
+
+
+#write.csv(fips.data, "C:\\Users\\vince\\Documents\\College Fourth Year\\ML and AI for Engineers\\Final Project\\data\\fips_data.csv")
+```
+
+
